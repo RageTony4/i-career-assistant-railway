@@ -12,6 +12,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.5.0/mammoth.browser.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
+        html {
+            scroll-behavior: smooth;
+        }
         body { font-family: 'Inter', sans-serif; }
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -219,6 +222,21 @@
             runAIAnalysis(jobDescription, cvTextContent, selectedTone);
         }
 
+        // This function calls your secure backend
+        async function callServer(prompt, model) {
+            // This path works for both Railway and Vercel deployments
+            const response = await fetch('/api/ai_analysis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, model })
+            });
+            if (!response.ok) {
+                const errorBody = await response.json();
+                throw new Error(errorBody.error || 'Request to the server failed.');
+            }
+            return response.json();
+        }
+
         async function runAIAnalysis(jobDescription, cvText, tone) {
             inputCard.classList.add('hidden');
             resultsCard.classList.add('hidden');
@@ -226,29 +244,11 @@
             coverLetterSection.classList.add('hidden');
             loadingState.classList.remove('hidden');
             
-            const apiKey = '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';
-
             const prompt = `You are "Career-GPT," an expert-level career coach. Your task is to analyze the provided [JOB_DESCRIPTION_URL] and [USER_CV] and return a single JSON object. Do not include any text outside the JSON object. The rewrite must be in a ${tone} tone. You should infer the job details from the URL. JSON Structure: {"cv_score": <score from 0-100>, "modified_cv": "<The rewritten cv>", "changes_made": [{"change": "<A description of the change>", "reason": "<The reason for the change>"}], "recommendations": ["<An actionable recommendation>"]}. Input: [JOB_DESCRIPTION_URL]: ${jobDescription} [USER_CV]: ${cvText}`;
 
             try {
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${apiKey}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        "model": "deepseek/deepseek-r1-0528:free",
-                        "messages": [{ "role": "user", "content": prompt.trim() }]
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error.message || `API request failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
+                // The API key is now handled securely by your backend server.
+                const data = await callServer(prompt.trim(), 'deepseek/deepseek-r1-0528:free');
                 const aiResponseString = data.choices[0].message.content;
                 const jsonMatch = aiResponseString.match(/\{[\s\S]*\}/);
                 if (!jsonMatch) throw new Error("AI did not return a valid JSON object.");
@@ -289,30 +289,14 @@
             coverLetterLoadingState.classList.remove('hidden');
             generateCoverLetterBtn.disabled = true;
 
-            const apiKey = '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';
             const prompt = `You are "Career-GPT," an expert career writer. Based on the following [JOB_DESCRIPTION_URL] and [MODIFIED_CV], write a compelling, professional cover letter. The tone must be ${lastAnalysisParams.tone}. Output only the letter text. Do not include headings or other text. [JOB_DESCRIPTION_URL]: ${lastAnalysisParams.jobDescription} [MODIFIED_CV]: ${modifiedCvTextarea.value}`;
             
             try {
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        "model": "deepseek/deepseek-r1-0528:free",
-                        "messages": [{ "role": "user", "content": prompt.trim() }]
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error.message || `API request failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
+                const data = await callServer(prompt.trim(), 'deepseek/deepseek-r1-0528:free');
                 coverLetterTextarea.value = data.choices[0].message.content;
                 showToast("Cover Letter Generated!");
                 // Smoothly scroll to the cover letter section
                 setTimeout(() => coverLetterSection.scrollIntoView({ behavior: 'smooth' }), 100);
-
 
             } catch (error) {
                 showError(`Cover letter generation failed: ${error.message}`);
